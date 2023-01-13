@@ -41,13 +41,13 @@ module Table =
   [<RequireQualifiedAccess>]
   type private Msg = SortingOrderToggled of elementId: string
 
-  let inline private init<'rowData>
+  let private init<'rowData>
     (config: Config<'rowData>)
     (rowData: 'rowData list)
     : Model<'rowData> * Cmd<Msg> =
     Model.Init rowData config.columns config.rowDataToStrings, Cmd.none
 
-  let inline private update msg (model: Model<'a>) =
+  let private update msg (model: Model<'a>) =
     match msg with
     | Msg.SortingOrderToggled elementId ->
       JS.console.log elementId
@@ -130,7 +130,7 @@ module Table =
     ]
 
   [<ReactComponent>]
-  let Table<'rowData> (config: Config<'rowData>) (rowData: 'rowData list) =
+  let Table (config: Config<'rowData>) (rowData: 'rowData list) =
     JsInterop.importAll "../index.css"
 
     let model, dispatch = React.useElmish (init config rowData, update, [||])
