@@ -1,6 +1,5 @@
 namespace BTable
 
-open Elmish.Obsolete
 open Fable.Core
 open Feliz
 open Feliz.UseElmish
@@ -8,30 +7,29 @@ open Elmish
 open Fable.Core.JsInterop
 
 module Table =
-  type Wrapper<'a> = {
-    items: 'a list
-    columns: Column<'a> list
-    itemToStrings: 'a -> string list
+  type Config<'rowData> = {
+    rowDataToStrings: 'rowData -> string list
+    columns: Column<'rowData> list
   }
 
-  and Column<'a> = {
+  and Column<'rowData> = {
     name: string
-    sorter: 'a -> 'a -> int
+    sorter: 'rowData -> 'rowData -> int
   }
 
-  type private Model<'a> =
+  type private Model<'rowData> =
     {
-      items: 'a list
-      columns: Column<'a> list
-      itemToStrings: 'a -> string list
+      rowData: 'rowData list
+      columns: Column<'rowData> list
+      rowDataToStrings: 'rowData -> string list
       sortKey: string
       sortingOrder: SortingOrder
     }
 
-    static member Init items columns itemsToStrings : Model<'a> = {
-      items = items
+    static member Init rowData columns rowDataToStrings : Model<'rowData> = {
+      rowData = rowData
       columns = columns
-      itemToStrings = itemsToStrings
+      rowDataToStrings = rowDataToStrings
       sortKey = ""
       sortingOrder = SortingOrder.Ascending
     }
@@ -43,36 +41,34 @@ module Table =
   [<RequireQualifiedAccess>]
   type private Msg = SortingOrderToggled of elementId: string
 
-  let inline private init<'a> (items: Wrapper<'a>) : Model<'a> * Cmd<Msg> =
-    Model.Init items.items items.columns items.itemToStrings, Cmd.none
+  let inline private init<'rowData>
+    (config: Config<'rowData>)
+    (rowData: 'rowData list)
+    : Model<'rowData> * Cmd<Msg> =
+    Model.Init rowData config.columns config.rowDataToStrings, Cmd.none
 
   let inline private update msg (model: Model<'a>) =
     match msg with
     | Msg.SortingOrderToggled elementId ->
-      let reverseSortingOrder currentOrder =
-        match currentOrder with
-        | SortingOrder.Ascending -> SortingOrder.Descending
-        | SortingOrder.Descending -> SortingOrder.Ascending
-
       JS.console.log elementId
-
+      // This lookup should always work.
       let col = model.columns |> List.find (fun c -> c.name = elementId)
 
-      let sorted currentOrder =
-        let s = model.items |> List.sortWith col.sorter
+      let sortedRowData, newSortingOrder =
+        let sorted = model.rowData |> List.sortWith col.sorter
 
-        match currentOrder with
-        | SortingOrder.Ascending -> s
-        | SortingOrder.Descending -> List.rev s
+        match model.sortingOrder with
+        | SortingOrder.Ascending -> sorted, SortingOrder.Descending
+        | SortingOrder.Descending -> List.rev sorted, SortingOrder.Ascending
 
       { model with
-          items = sorted model.sortingOrder
-          sortingOrder = reverseSortingOrder model.sortingOrder
+          rowData = sortedRowData
+          sortingOrder = newSortingOrder
           sortKey = elementId
       },
       Cmd.none
 
-  let private view (model: Model<'a>) (dispatch: Dispatch<Msg>) =
+  let private view (model: Model<_>) (dispatch: Dispatch<Msg>) =
     let tableHead =
       Html.thead [
         prop.classes [ tw.uppercase; tw.bg_gray_200 ]
@@ -113,11 +109,11 @@ module Table =
 
     let tableBody =
       Html.tbody [
-        for item in model.items ->
+        for item in model.rowData ->
           Html.tr [
             prop.classes []
             prop.children [
-              for cell in model.itemToStrings item ->
+              for cell in model.rowDataToStrings item ->
                 Html.td [ prop.classes []; prop.children [ Html.text cell ] ]
             ]
           ]
@@ -134,9 +130,9 @@ module Table =
     ]
 
   [<ReactComponent>]
-  let Table (items: Wrapper<'a>) =
+  let Table<'rowData> (config: Config<'rowData>) (rowData: 'rowData list) =
     JsInterop.importAll "../index.css"
 
-    let model, dispatch = React.useElmish (init items, update, [||])
+    let model, dispatch = React.useElmish (init config rowData, update, [||])
 
     view model dispatch

@@ -49,10 +49,9 @@ module Say =
     }
   ]
 
-  let w: Wrapper<Hi> = {
-    items = items
+  let w: Config<Hi> = {
     columns = columns
-    itemToStrings = itemToStrings
+    rowDataToStrings = itemToStrings
   }
 
-  root.render (Table w)
+  root.render (Table w items)
