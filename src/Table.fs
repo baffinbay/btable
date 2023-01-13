@@ -45,7 +45,10 @@ module Table =
     (config: Config<'rowData>)
     (rowData: 'rowData list)
     : Model<'rowData> * Cmd<Msg> =
-    Model.Init rowData config.columns config.rowDataToStrings, Cmd.none
+    Model.Init rowData config.columns config.rowDataToStrings,
+    match List.tryHead config.columns with
+    | Some col -> col.name |> Msg.SortingOrderToggled |> Cmd.ofMsg
+    | None -> Cmd.none
 
   let private update msg (model: Model<'a>) =
     match msg with
