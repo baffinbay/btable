@@ -8,17 +8,30 @@ open Elmish
 open Fable.Core.JsInterop
 
 module Table =
-  type private Model =
+  type Wrapper<'a> = {
+    items: 'a list
+    columns: Column<'a> list
+    itemToStrings: 'a -> string list
+  }
+
+  and Column<'a> = {
+    name: string
+    sorter: 'a -> 'a -> int
+  }
+
+  type private Model<'a> =
     {
-      headers: string list
-      rows: string list list
+      items: 'a list
+      columns: Column<'a> list
+      itemToStrings: 'a -> string list
       sortKey: string
       sortingOrder: SortingOrder
     }
 
-    static member Init = {
-      headers = []
-      rows = []
+    static member Init items columns itemsToStrings : Model<'a> = {
+      items = items
+      columns = columns
+      itemToStrings = itemsToStrings
       sortKey = ""
       sortingOrder = SortingOrder.Ascending
     }
@@ -30,14 +43,10 @@ module Table =
   [<RequireQualifiedAccess>]
   type private Msg = SortingOrderToggled of elementId: string
 
-  let inline private init (headers: string list) (rows: string list list) =
-    { Model.Init with
-        headers = headers
-        rows = rows
-    },
-    Cmd.none
+  let inline private init<'a> (items: Wrapper<'a>) : Model<'a> * Cmd<Msg> =
+    Model.Init items.items items.columns items.itemToStrings, Cmd.none
 
-  let private update msg (model: Model) =
+  let inline private update msg (model: Model<'a>) =
     match msg with
     | Msg.SortingOrderToggled elementId ->
       let reverseSortingOrder currentOrder =
@@ -47,37 +56,47 @@ module Table =
 
       JS.console.log elementId
 
+      let col = model.columns |> List.find (fun c -> c.name = elementId)
+
+      let sorted currentOrder =
+        let s = model.items |> List.sortWith col.sorter
+
+        match currentOrder with
+        | SortingOrder.Ascending -> s
+        | SortingOrder.Descending -> List.rev s
+
       { model with
+          items = sorted model.sortingOrder
           sortingOrder = reverseSortingOrder model.sortingOrder
           sortKey = elementId
       },
       Cmd.none
 
-  let private view (model: Model) (dispatch: Msg Dispatch) =
+  let private view (model: Model<'a>) (dispatch: Dispatch<Msg>) =
     let tableHead =
       Html.thead [
         prop.classes [ tw.uppercase; tw.bg_gray_200 ]
         prop.children [
           Html.tr [
             prop.children [
-              for s in [ "Song"; "Artist"; "Year" ] ->
+              for column in model.columns ->
                 Html.th [
                   prop.scope "col"
                   prop.classes []
                   prop.children [
                     // In button to make both clickable with hand on hover
                     Html.button [
-                      prop.id s
+                      prop.id column.name
                       prop.onClick (fun e ->
                         e.currentTarget?id |> Msg.SortingOrderToggled |> dispatch)
                       prop.classes [ tw.flex; tw.w_full ]
                       prop.children [
-                        Html.text s
+                        Html.text column.name
                         Html.i [
                           prop.classes [
                             tw.px_2
                             fa.fa_solid
-                            if model.sortKey = s then
+                            if model.sortKey = column.name then
                               match model.sortingOrder with
                               | SortingOrder.Ascending -> fa.fa_sort_up
                               | SortingOrder.Descending -> fa.fa_sort_down
@@ -94,11 +113,11 @@ module Table =
 
     let tableBody =
       Html.tbody [
-        for row in model.rows ->
+        for item in model.items ->
           Html.tr [
             prop.classes []
             prop.children [
-              for cell in row ->
+              for cell in model.itemToStrings item ->
                 Html.td [ prop.classes []; prop.children [ Html.text cell ] ]
             ]
           ]
@@ -115,9 +134,9 @@ module Table =
     ]
 
   [<ReactComponent>]
-  let Table (headers: string list) (rows: string list list) =
+  let Table (items: Wrapper<'a>) =
     JsInterop.importAll "../index.css"
 
-    let model, dispatch = React.useElmish (init (unbox headers) rows, update, [||])
+    let model, dispatch = React.useElmish (init items, update, [||])
 
     view model dispatch
