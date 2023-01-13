@@ -50,7 +50,6 @@ module Table =
   let private update msg (model: Model<'a>) =
     match msg with
     | Msg.SortingOrderToggled elementId ->
-      JS.console.log elementId
       // This lookup should always work.
       let col = model.columns |> List.find (fun c -> c.name = elementId)
 
